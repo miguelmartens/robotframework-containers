@@ -1,0 +1,64 @@
+name: Feature request
+description: Suggest a capability, a library, or a change to how the images are built
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: >
+        The underlying goal, not just the proposed change. There is often a way to
+        do it already, or a cheaper way to support it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to happen?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: variant
+    attributes:
+      label: Which variant would this affect?
+      multiple: true
+      options:
+        - base
+        - browser
+        - selenium
+        - a new variant
+        - the repository or CI, not the images
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ### If you are asking for a Python library
+
+        Every library added to a dependency group ships in every image that uses
+        that group, forever, and someone has to keep it working. Two cheaper
+        routes that need no change here:
+
+        ```dockerfile
+        FROM ghcr.io/miguelmartens/robotframework-containers:browser
+        USER 0
+        RUN uv pip install --python /opt/venv/bin/python3 --no-cache the-library
+        USER 1000:0
+        ```
+
+        or mount a `pip-requirements.txt` at `/opt/robotframework/` and it is
+        installed at start-up.
+
+        Requests are much more persuasive with a reason the library belongs in
+        the base image rather than in a derived one.
+
+  - type: checkboxes
+    id: considered
+    attributes:
+      label: Have you checked
+      options:
+        - label: Extending the image does not solve it, and I can say why
+        - label: I searched existing issues

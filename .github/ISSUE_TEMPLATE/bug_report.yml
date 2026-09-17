@@ -1,0 +1,104 @@
+name: Bug report
+description: Something in the image or the entrypoint does not behave as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please do not report security vulnerabilities here — use
+        [private reporting](https://github.com/miguelmartens/robotframework-containers/security/advisories/new)
+        instead.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you expected, and what you got instead. Paste the error if there is one.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: The command you ran
+      description: >
+        The full `docker run` / `podman run` / compose invocation, with the mounts.
+        A minimal `.robot` file helps if the failure needs one.
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: image
+    attributes:
+      label: Image tag or digest
+      description: >
+        `docker image inspect <image> --format '{{index .RepoDigests 0}}'` gives the
+        digest. A digest is much more useful than a moving tag.
+      placeholder: ghcr.io/miguelmartens/robotframework-containers@sha256:...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: variant
+    attributes:
+      label: Variant
+      options:
+        - base
+        - browser
+        - selenium
+        - built it myself from this repo
+    validations:
+      required: true
+
+  - type: dropdown
+    id: arch
+    attributes:
+      label: Architecture
+      options:
+        - linux/amd64
+        - linux/arm64
+        - other
+    validations:
+      required: true
+
+  - type: input
+    id: engine
+    attributes:
+      label: Engine and version
+      description: Output of `docker version --format '{{.Server.Version}}'` or `podman --version`.
+      placeholder: podman 6.0.2 (rootless, Fedora 43)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: user
+    attributes:
+      label: How are you running it?
+      options:
+        - default user (uid 1000, gid 0)
+        - "--user with a different uid"
+        - Kubernetes / OpenShift
+        - other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: narrowing
+    attributes:
+      label: Things that narrow it down a lot
+      description: Not required, but each one saves a round trip.
+      options:
+        - label: It also happens with the bundled suites in `tests/`
+        - label: It also happens with a read-only root filesystem
+        - label: (browser) It also happens with `--build-arg PLAYWRIGHT_INSTALL_FLAGS=--only-shell`
+        - label: It worked on an earlier tag — I can say which
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output
+      description: >
+        Container output. The entrypoint prefixes its own lines with `[rf-entrypoint]`;
+        those are usually the interesting ones.
+      render: shell

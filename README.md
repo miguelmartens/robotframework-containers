@@ -199,7 +199,8 @@ Extending the image is better:
 ```dockerfile
 FROM ghcr.io/miguelmartens/robotframework-containers:browser
 USER 0
-RUN /opt/venv/bin/pip install --no-cache-dir robotframework-appiumlibrary
+RUN uv pip install --python /opt/venv/bin/python3 --no-cache \
+    robotframework-appiumlibrary
 USER 1000:0
 ```
 
@@ -210,7 +211,7 @@ SBOM. Rather than a hand-maintained table in this README that drifts out of date
 
 ```bash
 # From the running image
-docker run --rm IMAGE /opt/venv/bin/pip list
+docker run --rm IMAGE uv pip list --python /opt/venv/bin/python3
 
 # From the published attestation, without pulling the image
 docker buildx imagetools inspect IMAGE --format '{{ json .SBOM }}'
@@ -249,7 +250,8 @@ be read. CSV-driven tests work without it. If you need Excel:
 ```dockerfile
 FROM ghcr.io/miguelmartens/robotframework-containers:base
 USER 0
-RUN /opt/venv/bin/pip install --no-cache-dir 'robotframework-datadriver[xls]'
+RUN uv pip install --python /opt/venv/bin/python3 --no-cache \
+    'robotframework-datadriver[xls]'
 USER 1000:0
 ```
 

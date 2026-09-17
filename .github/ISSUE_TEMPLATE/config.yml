@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/miguelmartens/robotframework-containers/security/advisories/new
+    about: Report privately. Please do not open a public issue for something exploitable.
+  - name: Migrating from ppodgorsek/docker-robot-framework
+    url: https://github.com/miguelmartens/robotframework-containers#migrating-from-ppodgorsekdocker-robot-framework
+    about: The differences, including what is deliberately not carried over.
+  - name: Robot Framework itself
+    url: https://forum.robotframework.org/
+    about: Questions about writing suites or keywords, rather than about these images.
