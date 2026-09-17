@@ -60,6 +60,11 @@ change that silently never appears in a release.
 
 ## Working on a change
 
+> GitHub opens new pull requests against `main` by default, because that is the
+> repository's default branch. Change the base to `develop` — the `main` ruleset
+> only accepts merge commits from a release, so a feature PR aimed there cannot
+> be merged.
+
 Branch from `develop`:
 
 ```bash
