@@ -1,0 +1,237 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  # Rebuild monthly so OS CVE fixes ship even when no dependency changed.
+  # Upstream only ever rebuilt when a version was bumped by hand.
+  schedule:
+    - cron: "0 4 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Lockfile is in sync with pyproject.toml
+        run: uv lock --check
+
+      - name: Lint the entrypoint
+        run: uvx ruff@0.15.4 check src/entrypoint/rf-entrypoint
+
+      - name: Lint the Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+
+      - name: Lint the bundled suites
+        run: |
+          uv sync --locked --no-default-groups --group base
+          uv run robocop check tests/
+
+  build-test:
+    needs: lint
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # `selenium` joins this list in phase 2.
+        variant: [base, browser]
+        platform:
+          - { arch: amd64, runner: ubuntu-24.04 }
+          # Native arm64. GitHub's arm64 runners are free for public repos, so
+          # there is no excuse for shipping an untested arm64 image the way
+          # upstream does.
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.variant }} (${{ matrix.platform.arch }})
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: ${{ matrix.variant }}
+          platforms: linux/${{ matrix.platform.arch }}
+          load: true
+          tags: rfc:${{ matrix.variant }}
+          cache-from: type=gha,scope=${{ matrix.variant }}-${{ matrix.platform.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.variant }}-${{ matrix.platform.arch }}
+          build-args: |
+            VERSION=${{ github.ref_type == 'tag' && github.ref_name || 'dev' }}
+            REVISION=${{ github.sha }}
+
+      - name: Report image size
+        run: |
+          size=$(docker image inspect rfc:${{ matrix.variant }} --format '{{.Size}}')
+          echo "### ${{ matrix.variant }} / ${{ matrix.platform.arch }}: $((size / 1024 / 1024)) MB" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Serve the test site
+        if: matrix.variant == 'browser'
+        run: |
+          python3 -m http.server 8000 --directory tests/site &
+          for _ in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8000/index.html >/dev/null && break
+            sleep 1
+          done
+
+      # Deliberately no --shm-size=1g anywhere in this job. Upstream passes it
+      # in every one of its own CI steps, which concedes the image is unusable
+      # at the default /dev/shm.
+      - name: Run the base suite
+        run: |
+          mkdir -p reports
+          docker run --rm \
+            -v "$PWD/tests/base:/opt/robotframework/tests:ro" \
+            -v "$PWD/reports:/opt/robotframework/reports" \
+            rfc:${{ matrix.variant }}
+
+      - name: Run the browser suite
+        if: matrix.variant == 'browser'
+        run: |
+          mkdir -p reports/browser
+          docker run --rm --network host \
+            -e SITE_URL=http://127.0.0.1:8000 \
+            -e ROBOT_TEST_RUN_ID=browser \
+            -v "$PWD/tests/browser:/opt/robotframework/tests:ro" \
+            -v "$PWD/reports:/opt/robotframework/reports" \
+            rfc:${{ matrix.variant }}
+
+      - name: Regression -- arbitrary UID with GID 0 (ppodgorsek #425, #420, #424)
+        run: |
+          mkdir -p reports-uid && chmod g+w reports-uid
+          docker run --rm --user 4711:0 \
+            -v "$PWD/tests/base:/opt/robotframework/tests:ro" \
+            -v "$PWD/reports-uid:/opt/robotframework/reports" \
+            rfc:${{ matrix.variant }}
+
+      - name: Regression -- ROBOT_OPTIONS keeps spaces (ppodgorsek #194)
+        run: |
+          mkdir -p reports-opts
+          docker run --rm \
+            -e ROBOT_OPTIONS='--variable "SPACED:value with spaces"' \
+            -v "$PWD/tests/regression:/opt/robotframework/tests:ro" \
+            -v "$PWD/reports-opts:/opt/robotframework/reports" \
+            rfc:${{ matrix.variant }}
+
+      - name: Regression -- a caller-supplied command still gets setup (#489, #509)
+        run: |
+          mkdir -p reports-cmd
+          docker run --rm \
+            -v "$PWD/reports-cmd:/opt/robotframework/reports" \
+            rfc:${{ matrix.variant }} \
+            sh -c 'test -d /opt/robotframework/reports && test -w "$HOME" && echo setup-ok'
+
+      - name: Regression -- read-only root filesystem
+        run: |
+          mkdir -p reports-ro && chmod g+w reports-ro
+          docker run --rm --read-only --tmpfs /tmp \
+            --cap-drop=ALL --security-opt=no-new-privileges \
+            -v "$PWD/tests/base:/opt/robotframework/tests:ro" \
+            -v "$PWD/reports-ro:/opt/robotframework/reports" \
+            rfc:${{ matrix.variant }}
+
+      - name: Regression -- parallel execution via pabot
+        run: |
+          mkdir -p reports-pabot
+          docker run --rm \
+            -e ROBOT_THREADS=2 \
+            -v "$PWD/tests/base:/opt/robotframework/tests:ro" \
+            -v "$PWD/reports-pabot:/opt/robotframework/reports" \
+            rfc:${{ matrix.variant }}
+
+      - name: Scan for vulnerabilities
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: rfc:${{ matrix.variant }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+
+  publish:
+    needs: build-test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # cosign keyless signing
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [base, browser]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
+            suffix=-${{ matrix.variant }},onlatest=true
+          # Immutable, fully-qualified tags first. Upstream republished 4.0.0
+          # with different contents and broke people (#423); a full version
+          # here is never re-pushed.
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=${{ matrix.variant }},enable={{is_default_branch}}
+            type=sha,format=long
+
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: ${{ matrix.variant }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          sbom: true
+          provenance: mode=max
+          cache-from: |
+            type=gha,scope=${{ matrix.variant }}-amd64
+            type=gha,scope=${{ matrix.variant }}-arm64
+          build-args: |
+            VERSION=${{ github.ref_type == 'tag' && github.ref_name || 'dev' }}
+            REVISION=${{ github.sha }}
+
+      - uses: sigstore/cosign-installer@v4
+
+      - name: Sign the image
+        run: |
+          cosign sign --yes \
+            "${REGISTRY}/${IMAGE_NAME}@${DIGEST}"
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          DIGEST: ${{ steps.build.outputs.digest }}

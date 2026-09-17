@@ -1,0 +1,334 @@
+#!/opt/venv/bin/python3
+"""Entrypoint for the robotframework-containers images.
+
+Responsibilities, in order:
+
+1. Make the container usable under an arbitrary UID (OpenShift, ``--user=...``).
+2. Prepare the reports directory without trampling a caller's bind mount.
+3. Optionally install extra dependencies mounted at runtime.
+4. Build and run the robot/pabot command line, rerunning failures if asked.
+
+Any argument list other than ``run [extra robot args]`` is executed verbatim
+*after* steps 1-3. That is deliberate: orchestrators which supply their own
+command -- Testkube, Kubernetes, Jenkins agent pods -- still get a correctly
+prepared container. Upstream ships a bare ``CMD`` with no ``ENTRYPOINT``, so in
+those setups all of the above is silently skipped (ppodgorsek #489, #509).
+"""
+
+from __future__ import annotations
+
+import contextlib
+import os
+import pwd
+import shlex
+import subprocess
+import sys
+import tempfile
+import tomllib
+from pathlib import Path
+
+DEFAULT_TESTS_DIR = "/opt/robotframework/tests"
+DEFAULT_REPORTS_DIR = "/opt/robotframework/reports"
+DEFAULT_DEPENDENCY_DIR = "/opt/robotframework/dependencies"
+
+PIP_REQUIREMENTS = Path("/opt/robotframework/pip-requirements.txt")
+PYPROJECT = Path("/opt/robotframework/pyproject.toml")
+
+# robot and rebot return the number of failed tests (capped at 250) as their
+# exit code. Only 251 and above mean the tool itself failed. Upstream discards
+# rebot's exit code entirely, so a genuinely broken merge goes unnoticed.
+MAX_FAILED_TESTS_EXIT_CODE = 250
+
+
+def log(message: str) -> None:
+    print(f"[rf-entrypoint] {message}", flush=True)
+
+
+def warn(message: str) -> None:
+    print(f"[rf-entrypoint] WARNING: {message}", file=sys.stderr, flush=True)
+
+
+def die(message: str) -> None:
+    print(f"[rf-entrypoint] ERROR: {message}", file=sys.stderr, flush=True)
+    raise SystemExit(2)
+
+
+def env_int(name: str, default: int) -> int:
+    """Read an integer environment variable, failing loudly on garbage.
+
+    Upstream does ``[ "${ROBOT_THREADS}" -eq 1 ]`` in sh, which dies with an
+    unhelpful arithmetic error when the value is empty or non-numeric.
+    """
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        die(f"{name} must be an integer, got {raw!r}")
+        raise  # unreachable; keeps type checkers happy
+
+
+def ensure_writable_home() -> None:
+    """Give the current UID a passwd entry and a writable HOME.
+
+    The image declares ``USER 1000:0`` with a real account, but callers are
+    free to pass ``--user=4711:0`` and OpenShift always does something like
+    that. Without a passwd entry, anything that calls ``getpwuid`` or expands
+    ``~`` fails, and Selenium Manager -- whose cache defaults to
+    ``~/.cache/selenium`` -- cannot start at all.
+    """
+    uid = os.getuid()
+    home = os.environ.get("HOME") or "/home/robot"
+
+    try:
+        pwd.getpwuid(uid)
+        known = True
+    except KeyError:
+        known = False
+
+    if not known:
+        entry = f"robot-{uid}:x:{uid}:{os.getgid()}:Robot Framework:{home}:/bin/bash\n"
+        try:
+            with open("/etc/passwd", "a", encoding="utf-8") as handle:
+                handle.write(entry)
+            log(f"added a passwd entry for uid {uid}")
+        except OSError as exc:
+            warn(f"could not add a passwd entry for uid {uid}: {exc}")
+
+    if not os.access(home, os.W_OK):
+        fallback = tempfile.mkdtemp(prefix="robot-home-")
+        warn(f"{home} is not writable; using {fallback} as HOME instead")
+        home = fallback
+
+    os.environ["HOME"] = home
+
+
+def resolve_reports_dir() -> Path:
+    """Reports directory, with ROBOT_TEST_RUN_ID appended when set."""
+    base = Path(os.environ.get("ROBOT_REPORTS_DIR") or DEFAULT_REPORTS_DIR)
+    run_id = os.environ.get("ROBOT_TEST_RUN_ID", "").strip().strip("/")
+    # Path handles the trailing-slash case on its own; upstream needs an
+    # explicit `case`/`grep -c '/$'` dance for the same thing.
+    return base / run_id if run_id else base
+
+
+def ensure_reports_dir(path: Path) -> None:
+    """Create the reports directory, leaving an existing one alone.
+
+    ppodgorsek #403: the image chmods/chowns the reports directory
+    unconditionally, which mangles a caller's bind mount. Only touch
+    permissions on directories this process created itself.
+    """
+    if path.is_dir():
+        if not os.access(path, os.W_OK):
+            die(
+                f"the reports directory {path} exists but is not writable by "
+                f"uid {os.getuid()}:{os.getgid()}. Either mount it with matching "
+                f"ownership, or run the container with --user=<uid>:0 and make "
+                f"the directory group-writable."
+            )
+        return
+
+    created = path
+    while not created.parent.exists():
+        created = created.parent
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        die(f"could not create the reports directory {path}: {exc}")
+
+    # Only relax permissions on directories this process created; a
+    # bind-mounted reports directory belongs to the caller (#403).
+    for directory in (created, path):
+        with contextlib.suppress(OSError):
+            directory.chmod(0o775)
+
+
+def _dependencies_from_pyproject(data: dict) -> list[str]:
+    project = data.get("project", {})
+    if project.get("dependencies"):
+        return list(project["dependencies"])
+
+    poetry = data.get("tool", {}).get("poetry", {})
+    resolved: list[str] = []
+    for name, spec in (poetry.get("dependencies") or {}).items():
+        if name == "python":
+            continue
+        if isinstance(spec, str):
+            resolved.append(f"{name}{spec}")
+        elif isinstance(spec, dict) and "version" in spec:
+            resolved.append(f"{name}{spec['version']}")
+    return resolved
+
+
+def install_runtime_dependencies() -> None:
+    """Install dependencies mounted at runtime, if any.
+
+    Kept for compatibility with existing ppodgorsek and NS workflows. Extending
+    the image remains the better option: this runs on *every* container start
+    and needs network access at test time.
+    """
+    target = Path(os.environ.get("ROBOT_DEPENDENCY_DIR") or DEFAULT_DEPENDENCY_DIR)
+
+    if PYPROJECT.is_file():
+        try:
+            data = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))
+        except (OSError, tomllib.TOMLDecodeError) as exc:
+            die(f"could not parse {PYPROJECT}: {exc}")
+        requirements = _dependencies_from_pyproject(data)
+        if not requirements:
+            warn(f"{PYPROJECT} declares no dependencies; nothing to install")
+            return
+        source = str(PYPROJECT)
+        install_args = requirements
+    elif PIP_REQUIREMENTS.is_file():
+        source = str(PIP_REQUIREMENTS)
+        install_args = ["-r", str(PIP_REQUIREMENTS)]
+        requirements = PIP_REQUIREMENTS.read_text(encoding="utf-8").splitlines()
+    else:
+        return
+
+    log(f"installing runtime dependencies from {source}")
+    target.mkdir(parents=True, exist_ok=True)
+    result = subprocess.run(
+        [
+            sys.executable, "-m", "pip", "install",
+            "--no-cache-dir", "--target", str(target),
+            *install_args,
+        ],
+        check=False,
+    )
+    if result.returncode != 0:
+        die(f"failed to install dependencies from {source}")
+
+    os.environ["PYTHONPATH"] = os.pathsep.join(
+        [str(target), *filter(None, [os.environ.get("PYTHONPATH")])]
+    )
+
+    if any("robotframework-browser" in line.lower() for line in requirements):
+        warn(
+            "robotframework-browser was installed at runtime. Its Playwright "
+            "browser binaries are baked into the image at build time and "
+            "PLAYWRIGHT_BROWSERS_PATH is not writable, so a different Browser "
+            "Library version will not have a matching browser. Extend the "
+            "image instead of installing it here."
+        )
+
+
+def build_command(reports_dir: Path, extra_args: list[str]) -> list[str]:
+    """Assemble the robot/pabot command line.
+
+    ROBOT_OPTIONS and PABOT_OPTIONS are parsed with shlex rather than left to
+    shell word-splitting, so ``--variable "NAME:value with spaces"`` finally
+    survives. That has been broken upstream since 2019 (#194, #345, #353) and
+    is unfixable there by construction.
+    """
+    tests_dir = os.environ.get("ROBOT_TESTS_DIR") or DEFAULT_TESTS_DIR
+    threads = env_int("ROBOT_THREADS", 1)
+
+    if threads > 1:
+        command = ["pabot", "--verbose", "--processes", str(threads)]
+        command += shlex.split(os.environ.get("PABOT_OPTIONS", ""))
+    else:
+        command = ["robot"]
+
+    command += ["--outputdir", str(reports_dir)]
+    command += shlex.split(os.environ.get("ROBOT_OPTIONS", ""))
+    command += extra_args
+    command.append(tests_dir)
+    return command
+
+
+def rerun_failed(reports_dir: Path, exit_code: int) -> int:
+    """Rerun failing tests and merge the results, up to N rounds."""
+    rounds = env_int("ROBOT_RERUN_MAX_ROUNDS", 0)
+    if rounds <= 0 or exit_code == 0:
+        return exit_code
+
+    tests_dir = os.environ.get("ROBOT_TESTS_DIR") or DEFAULT_TESTS_DIR
+    robot_options = shlex.split(os.environ.get("ROBOT_OPTIONS", ""))
+    rebot_options = shlex.split(os.environ.get("ROBOT_RERUN_REBOT_OPTIONS", ""))
+    output = reports_dir / "output.xml"
+    rerun_output = reports_dir / "output_rerun.xml"
+
+    for round_number in range(1, rounds + 1):
+        if exit_code == 0:
+            break
+        if not output.is_file():
+            warn(f"{output} is missing; cannot rerun failed tests")
+            break
+
+        log(f"rerunning failed tests, round {round_number} of {rounds}")
+        exit_code = subprocess.run(
+            [
+                "robot",
+                "--rerunfailed", str(output),
+                "--output", str(rerun_output),
+                "--outputdir", str(reports_dir),
+                *robot_options,
+                tests_dir,
+            ],
+            check=False,
+        ).returncode
+
+        if not rerun_output.is_file():
+            warn("the rerun produced no output; stopping here")
+            break
+
+        merge = subprocess.run(
+            [
+                "rebot",
+                "--outputdir", str(reports_dir),
+                "--output", str(output),
+                "--merge", str(output),
+                *rebot_options,
+                str(rerun_output),
+            ],
+            check=False,
+            stdout=subprocess.DEVNULL,
+        )
+        if merge.returncode > MAX_FAILED_TESTS_EXIT_CODE:
+            warn(f"rebot could not merge the rerun results (exit {merge.returncode})")
+            break
+        rerun_output.unlink(missing_ok=True)
+
+    return exit_code
+
+
+def exec_or_die(command: list[str]) -> None:
+    """Replace this process, or explain clearly why it could not."""
+    try:
+        os.execvp(command[0], command)
+    except OSError as exc:
+        die(f"could not execute {command[0]!r}: {exc}")
+
+
+def main(argv: list[str]) -> int:
+    ensure_writable_home()
+
+    reports_dir = resolve_reports_dir()
+    ensure_reports_dir(reports_dir)
+    os.environ["ROBOT_REPORTS_FINAL_DIR"] = str(reports_dir)
+
+    install_runtime_dependencies()
+
+    # Anything that is not `run` is the caller's own command. Exec it so it
+    # becomes tini's child and receives signals directly.
+    if argv and argv[0] != "run":
+        exec_or_die(argv)
+
+    command = build_command(reports_dir, argv[1:] if argv else [])
+    log(f"running: {shlex.join(command)}")
+
+    # With no reruns configured there is nothing to do afterwards, so hand the
+    # process over entirely rather than sitting in the middle of the pipe.
+    if env_int("ROBOT_RERUN_MAX_ROUNDS", 0) <= 0:
+        exec_or_die(command)
+
+    exit_code = subprocess.run(command, check=False).returncode
+    return rerun_failed(reports_dir, exit_code)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

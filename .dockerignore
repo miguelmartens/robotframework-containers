@@ -1,0 +1,10 @@
+# Exclude everything, then allow back exactly what the build needs.
+#
+# Doing it this way round means repository tooling (CI config, docs, the test
+# suites, editor settings) can never end up in the build context and can never
+# bust the layer cache.
+**
+
+!/pyproject.toml
+!/uv.lock
+!/src/entrypoint/rf-entrypoint

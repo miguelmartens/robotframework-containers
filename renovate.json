@@ -1,0 +1,45 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "labels": ["dependencies"],
+  "timezone": "Europe/Amsterdam",
+  "schedule": ["before 6am on monday"],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": true,
+    "schedule": ["before 6am on the first day of the month"]
+  },
+  "packageRules": [
+    {
+      "description": "Patch and minor updates merge themselves once CI is green. The upstream project died of a maintenance treadmill: roughly 45 of its 80 most recent closed issues were one-line 'upgrade X' tickets handled by hand.",
+      "matchUpdateTypes": ["patch", "minor", "digest", "pin"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
+    },
+    {
+      "description": "Majors get looked at. Robot Framework and the browser libraries move in ways that need a human.",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "addLabels": ["major"]
+    },
+    {
+      "description": "Keep the base image pinned by digest. ppodgorsek #527 asked for exactly this and it was closed wontfix for lack of capacity.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["debian"],
+      "pinDigests": true
+    },
+    {
+      "description": "robotframework-browser and its batteries package ship as a matched pair and must move together.",
+      "matchPackageNames": [
+        "robotframework-browser",
+        "robotframework-browser-batteries"
+      ],
+      "groupName": "robotframework-browser"
+    }
+  ]
+}

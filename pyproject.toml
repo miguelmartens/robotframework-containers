@@ -1,0 +1,77 @@
+[project]
+name = "robotframework-containers"
+version = "0.1.0"
+description = "Container images for running Robot Framework test suites."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.13"
+
+# The project itself ships no Python distribution; the images are the artefact.
+# Everything the images contain lives in the dependency groups below, one per
+# image variant. `uv sync --group <variant>` builds that variant's virtualenv.
+dependencies = []
+
+[dependency-groups]
+
+# Libraries shared by every variant. No browser drivers, no Selenium, no
+# Playwright -- those belong to the variant that needs them.
+base = [
+  "robotframework==7.5",
+  # uv sync builds a venv without pip. The entrypoint needs it for the
+  # documented runtime dependency mounts (pip-requirements.txt/pyproject.toml).
+  "pip==26.2.1",
+  "robotframework-pabot==5.2.2",
+  "robotframework-requests==0.9.7",
+  "robotframework-jsonlibrary==0.5",
+  # Deliberately without the [xls] extra: it pulls pandas and numpy, which
+  # measured 141 MB of a 277 MB virtualenv -- more than half the image, to read
+  # spreadsheets. CSV data-driven tests work without it. See the README for how
+  # to add Excel support back in a derived image.
+  "robotframework-datadriver==1.11.2",
+  "robotframework-datetime-tz==1.0.6",
+  "robotframework-faker==6.0.0",
+  "robotframework-sshlibrary==3.8.0",
+  "robotframework-databaselibrary==2.4.1",
+  "robotframework-imaplibrary2==0.4.11",
+  "robotframework-ftplibrary==1.9",
+  # Linter and formatter in one package since Robocop 6 absorbed Robotidy.
+  # Upstream issue #511 asked for rflint, which is dead at 1.1.
+  "robotframework-robocop==9.0.0",
+]
+
+# The [bb] extra pulls robotframework-browser-batteries, which ships a
+# precompiled Node runtime and the Node-side dependencies as wheels. That keeps
+# nodejs and npm out of the image entirely.
+browser = [
+  { include-group = "base" },
+  "robotframework-browser[bb]==20.4.0",
+]
+
+selenium = [
+  { include-group = "base" },
+  "robotframework-seleniumlibrary==6.9.0",
+]
+
+# Tooling for working on this repository, not shipped in any image.
+dev = [
+  "ruff==0.15.4",
+]
+
+[tool.uv]
+# The images are the artefact; there is no Python distribution to build here.
+package = false
+# Every variant venv is built against the Debian-provided interpreter so the
+# venv stays valid when it is copied into a runtime stage.
+python-downloads = "never"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.robocop.lint]
+# Every suite here carries suite-level documentation and the test names read as
+# full sentences, so a per-test [Documentation] would only restate the name.
+ignore = ["DOC02"]

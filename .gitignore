@@ -1,0 +1,25 @@
+# Robot Framework output
+reports/
+output.xml
+log.html
+report.html
+*.png
+
+# Tool caches
+.robocop_cache/
+.pabotsuitenames
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.ruff_cache/
+
+# Local build scratch
+*.tar
+.build/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
