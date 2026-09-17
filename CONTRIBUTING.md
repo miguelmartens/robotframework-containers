@@ -151,13 +151,30 @@ issue tracker.
    and squashing hides them.
 2. Release Please opens a `chore(release): x.y.z` pull request against `main`
    with the version bump and the generated `CHANGELOG.md` entry.
-3. Merge it. That tags `vx.y.z`, creates the GitHub release, and publishes the
+3. **Approve the workflow run on that pull request.** It was opened by
+   `GITHUB_TOKEN`, so GitHub parks its CI run as _action required_ rather than
+   starting it. Until you click **Approve and run**, the required `ci` check
+   never appears and the pull request stays blocked. This is a deliberate
+   anti-recursion guard, not a misconfiguration.
+4. Merge it. That tags `vx.y.z`, creates the GitHub release, and publishes the
    images.
 
+The same rule is why publishing lives in a reusable workflow that
+`release-please.yml` calls directly: a tag pushed by `GITHUB_TOKEN` does not
+trigger `on: push: tags`, so a conventional tag-triggered publish would never
+fire. Using a personal access token or a GitHub App for Release Please would
+remove both quirks, at the cost of a credential to manage.
+
 Nothing is published from `main` or `develop` directly — only from a release.
-`CHANGELOG.md`, the version in `pyproject.toml` and
-`.release-please-manifest.json` are all maintained by the tool; do not edit them
-by hand.
+`CHANGELOG.md`, `version.txt` and `.release-please-manifest.json` are maintained
+by the tool; do not edit them by hand. `CHANGELOG.md` is excluded from Prettier
+and markdownlint because Release Please writes it in its own format.
+
+The version in `pyproject.toml` is deliberately fixed at `0.0.0` and is _not_
+the release version. uv records the project version in `uv.lock`, so bumping it
+would desync the lockfile and fail `uv lock --check` on every release pull
+request. This is not a published Python package; the version that matters is the
+git tag.
 
 ## Pull requests
 
