@@ -60,9 +60,13 @@ dev = [
 [tool.uv]
 # The images are the artefact; there is no Python distribution to build here.
 package = false
-# Every variant venv is built against the Debian-provided interpreter so the
-# venv stays valid when it is copied into a runtime stage.
-python-downloads = "never"
+
+# Note: pinning the interpreter belongs in the Dockerfile, not here. The image
+# builds must use Debian's python3 so the venv stays valid when it is copied
+# into a runtime stage, and `builder-common` sets UV_PYTHON=/usr/bin/python3
+# and UV_PYTHON_DOWNLOADS=never to enforce that. Setting python-downloads here
+# would apply everywhere -- including CI runners and contributor machines that
+# have no system Python >= 3.13 -- and simply fail.
 
 [tool.ruff]
 target-version = "py313"
