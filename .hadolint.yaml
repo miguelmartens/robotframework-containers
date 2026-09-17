@@ -1,0 +1,17 @@
+# hadolint configuration -- https://github.com/hadolint/hadolint
+ignored:
+  # DL3008: "Pin versions in apt get install."
+  #
+  # Deliberately ignored. The base image is pinned by digest, which fixes the
+  # whole apt snapshot far more reliably than pinning individual packages ever
+  # could, and Renovate keeps that digest moving.
+  #
+  # Pinning package versions against a live Debian suite is actively harmful:
+  # the archive keeps only the current version of a package for a given suite,
+  # so a pinned version disappears at the next point release and the build stops
+  # working. That is not hypothetical -- it is how the predecessor project broke
+  # (ppodgorsek/docker-robot-framework#541, where a pinned
+  # xorg-x11-server-Xvfb-21.1.18* vanished from the Fedora repos).
+  #
+  # Reproducibility comes from the digest plus uv.lock, not from apt pins.
+  - DL3008
