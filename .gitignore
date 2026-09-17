@@ -1,5 +1,8 @@
 # Robot Framework output
-reports/
+# reports/ is tracked as an empty directory so compose bind-mounts it with
+# the right ownership instead of the engine creating it as root.
+reports/*
+!reports/.gitkeep
 output.xml
 log.html
 report.html

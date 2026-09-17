@@ -1,0 +1,63 @@
+# Run the bundled suites with either engine:
+#
+#   docker compose run --rm base
+#   docker compose run --rm browser
+#   podman compose run --rm browser
+#
+# `compose.yaml` is the Compose Specification name, which Docker Compose v2 and
+# podman-compose both read. There is deliberately no top-level `version:` key --
+# the Compose Specification dropped it and Docker Compose v2 warns about it.
+#
+# Note there is no `shm_size:` anywhere. The browser image works at the default
+# /dev/shm; if it ever needs more, that is a bug worth reporting.
+name: robotframework-containers
+
+services:
+  # The site under test. Served from our own base image so no extra image is
+  # pulled, and so the entrypoint's command-passthrough gets exercised too.
+  site:
+    build:
+      context: .
+      target: base
+    command:
+      - python3
+      - -m
+      - http.server
+      - "8000"
+      - --directory
+      - /srv
+    volumes:
+      - ./tests/site:/srv:ro,z
+    healthcheck:
+      # The image has Python but no curl, so probe with urllib.
+      test:
+        - CMD
+        - python3
+        - -c
+        - import urllib.request; urllib.request.urlopen("http://localhost:8000/index.html")
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 2s
+
+  base:
+    build:
+      context: .
+      target: base
+    volumes:
+      - ./tests/base:/opt/robotframework/tests:ro,z
+      - ./reports:/opt/robotframework/reports:z
+
+  browser:
+    build:
+      context: .
+      target: browser
+    depends_on:
+      site:
+        condition: service_healthy
+    environment:
+      SITE_URL: http://site:8000
+      ROBOT_TEST_RUN_ID: browser
+    volumes:
+      - ./tests/browser:/opt/robotframework/tests:ro,z
+      - ./reports:/opt/robotframework/reports:z

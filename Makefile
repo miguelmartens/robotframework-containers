@@ -1,9 +1,15 @@
 .PHONY: help install lock sync format format-check lint lint-check \
-        hooks hooks-run hooks-update build test clean
+        hooks hooks-run hooks-update build test \
+        compose-base compose-browser compose-down clean
 
 YAMLLINT ?= yamllint
 PRECOMMIT ?= pre-commit
 RUFF_VERSION ?= 0.15.4
+
+# Either engine works. `make build ENGINE=podman` and `make compose-browser
+# ENGINE=podman` are exercised in CI alongside the Docker path.
+ENGINE ?= docker
+COMPOSE ?= $(ENGINE) compose
 
 VARIANT ?= browser
 IMAGE ?= rfc:$(VARIANT)
@@ -26,7 +32,12 @@ help:
 	@echo "  make hooks-update    - Bump the pinned hook revisions (Renovate does this too)"
 	@echo "  make build           - Build one image  (VARIANT=base|browser|selenium)"
 	@echo "  make test            - Run the bundled suites against that image"
+	@echo "  make compose-base    - Run the base suite via compose"
+	@echo "  make compose-browser - Run the browser suite via compose (starts the site)"
+	@echo "  make compose-down    - Tear the compose project down"
 	@echo "  make clean           - Remove the local venv, reports and caches"
+	@echo ""
+	@echo "Set ENGINE=podman to use Podman instead of Docker."
 
 # Install the pinned Prettier version
 install:
@@ -81,16 +92,37 @@ hooks-run:
 hooks-update:
 	$(PRECOMMIT) autoupdate
 
+# Docker needs buildx for the BuildKit cache mounts; Podman/Buildah support
+# them natively, so it takes a plain `podman build`.
 build:
+ifeq ($(ENGINE),docker)
 	docker buildx build --target $(VARIANT) --platform $(PLATFORM) --load -t $(IMAGE) .
+else
+	$(ENGINE) build --target $(VARIANT) --platform $(PLATFORM) -t $(IMAGE) .
+endif
 
 # Deliberately no --shm-size=1g: the image has to work at the default.
+# The :z labels are for SELinux hosts under Podman; other platforms ignore them.
 test: build
 	mkdir -p reports
-	docker run --rm \
-		-v "$(CURDIR)/tests/base:/opt/robotframework/tests:ro" \
-		-v "$(CURDIR)/reports:/opt/robotframework/reports" \
+	$(ENGINE) run --rm \
+		-v "$(CURDIR)/tests/base:/opt/robotframework/tests:ro,z" \
+		-v "$(CURDIR)/reports:/opt/robotframework/reports:z" \
 		$(IMAGE)
 
+# One-shot runs through compose, which also brings up the static site the
+# browser suite needs.
+compose-base:
+	$(COMPOSE) run --rm base
+
+compose-browser:
+	$(COMPOSE) run --rm browser
+
+compose-down:
+	$(COMPOSE) down --remove-orphans
+
+# reports/.gitkeep is tracked -- keep the directory, drop its contents.
 clean:
-	rm -rf .venv node_modules reports reports-* .ruff_cache .robocop_cache .pabotsuitenames
+	-$(COMPOSE) down --remove-orphans 2>/dev/null
+	rm -rf .venv node_modules reports-* .ruff_cache .robocop_cache .pabotsuitenames
+	-find reports -mindepth 1 ! -name .gitkeep -delete

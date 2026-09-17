@@ -37,6 +37,44 @@ Reports land in `./reports` as `output.xml`, `log.html` and `report.html`.
 
 You do **not** need `--shm-size=1g`. If you ever do, that is a bug — please report it.
 
+### Docker or Podman
+
+Both are supported and both are tested in CI. Swap `docker` for `podman` in any
+command on this page.
+
+`Containerfile` and `.containerignore` are symlinks to `Dockerfile` and
+`.dockerignore`, so Podman and Buildah find them by their preferred names while
+there is still only one file to maintain. Buildah handles the BuildKit
+`--mount=type=cache` directives natively; Docker needs `buildx` for them.
+
+The `:z` suffix on the volume mounts below is an SELinux shared-label request.
+It matters on Fedora/RHEL hosts and is ignored everywhere else. `:Z` would also
+work but relabels the host directory exclusively, which can break other tools
+reading the same path.
+
+### Compose
+
+`compose.yaml` runs the suites with either engine and starts the static site the
+browser suite needs:
+
+```bash
+docker compose run --rm base
+docker compose run --rm browser
+
+podman compose run --rm base
+podman compose run --rm browser
+```
+
+Or through the Makefile, which takes `ENGINE=podman`:
+
+```bash
+make compose-browser
+make compose-browser ENGINE=podman
+```
+
+The `browser` service waits on a healthcheck against the site rather than
+racing it.
+
 ## Configuration
 
 | Variable                    | Default                       | Description                                        |
@@ -270,6 +308,12 @@ same linters, so formatting is enforced rather than merely suggested.
 
 Two dependency sets, two lockfiles: `uv.lock` for everything that ships in an
 image, `package-lock.json` purely to pin Prettier for this repository.
+
+> **Windows contributors:** `Containerfile` and `.containerignore` are git
+> symlinks. Clone with `git config --global core.symlinks true` (or run an
+> elevated/Developer Mode shell), otherwise they check out as text files
+> containing the target name and `podman build` will fail. `docker build` is
+> unaffected either way, since it reads `Dockerfile` directly.
 
 Dependencies live in `pyproject.toml` as one group per variant, resolved into a
 single hash-pinned `uv.lock`. Run `make lock` after changing them.

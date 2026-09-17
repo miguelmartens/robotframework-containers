@@ -182,6 +182,39 @@ jobs:
           ignore-unfixed: true
           severity: CRITICAL,HIGH
 
+  # Podman resolves Containerfile/.containerignore (symlinks to the Docker
+  # names) and Buildah handles the BuildKit cache mounts natively. Without this
+  # job the Podman path would rot silently.
+  podman:
+    needs: lint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build with Podman
+        run: podman build --target base -t rfc:base .
+
+      - name: Run the base suite, rootless
+        run: |
+          mkdir -p reports
+          podman run --rm \
+            -v "$PWD/tests/base:/opt/robotframework/tests:ro,z" \
+            -v "$PWD/reports:/opt/robotframework/reports:z" \
+            rfc:base
+
+      - name: Run hardened, with an arbitrary UID
+        run: |
+          mkdir -p reports-hardened && chmod g+w reports-hardened
+          podman run --rm --user 4711:0 \
+            --read-only --tmpfs /tmp \
+            --cap-drop=ALL --security-opt=no-new-privileges \
+            -v "$PWD/tests/base:/opt/robotframework/tests:ro,z" \
+            -v "$PWD/reports-hardened:/opt/robotframework/reports:z" \
+            rfc:base
+
+      - name: Reports are owned by the invoking user, not root
+        run: test -O reports/output.xml
+
   publish:
     needs: build-test
     if: github.event_name != 'pull_request'
