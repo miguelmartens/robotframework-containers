@@ -6,6 +6,11 @@
 # Prettier is a `local` system hook on purpose: its version comes from
 # package-lock.json, the same one `make format` uses. Pinning it here as well would
 # give the repo a second source of truth that drifts.
+# Without these, every hook runs again at commit-msg time as well as
+# pre-commit, so each commit prints the whole list twice.
+default_install_hook_types: [pre-commit, commit-msg]
+default_stages: [pre-commit]
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
