@@ -1,0 +1,13 @@
+extends: default
+
+rules:
+  line-length: disable
+  document-start: disable
+  truthy: disable
+  comments: disable
+  comments-indentation: disable
+
+ignore:
+  - "*.json"
+  - "node_modules/"
+  - ".venv/"

@@ -9,6 +9,9 @@ report.html
 .robocop_cache/
 .pabotsuitenames
 
+# Node tooling (Prettier only)
+node_modules/
+
 # Python
 __pycache__/
 *.py[cod]

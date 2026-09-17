@@ -29,8 +29,19 @@ jobs:
         with:
           enable-cache: true
 
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
       - name: Lockfile is in sync with pyproject.toml
         run: uv lock --check
+
+      - name: Formatting (Prettier + Ruff)
+        run: make format-check
+
+      - name: Lint YAML
+        run: pipx run yamllint .
 
       - name: Lint the entrypoint
         run: uvx ruff@0.15.4 check src/entrypoint/rf-entrypoint
@@ -53,12 +64,17 @@ jobs:
       matrix:
         # `selenium` joins this list in phase 2.
         variant: [base, browser]
+        # Block style, not flow mappings: Prettier writes `{ a: b }` with spaces
+        # inside the braces and yamllint's `braces` rule rejects exactly that.
+        # Avoiding flow mappings keeps both tools happy without disabling a rule.
         platform:
-          - { arch: amd64, runner: ubuntu-24.04 }
+          - arch: amd64
+            runner: ubuntu-24.04
           # Native arm64. GitHub's arm64 runners are free for public repos, so
           # there is no excuse for shipping an untested arm64 image the way
           # upstream does.
-          - { arch: arm64, runner: ubuntu-24.04-arm }
+          - arch: arm64
+            runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v5
 

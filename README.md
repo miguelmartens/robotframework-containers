@@ -12,11 +12,11 @@ One image per job, rather than one image carrying five browser installations.
 This is the split that upstream planned in
 [#484](https://github.com/ppodgorsek/docker-robot-framework/issues/484) and never shipped.
 
-| Variant    | Contains                                                    | Use when                                     |
-| ---------- | ----------------------------------------------------------- | -------------------------------------------- |
-| `base`     | Robot Framework and the common libraries. No browsers.       | API, database, SSH, file and data-driven tests |
-| `browser`  | `base` plus Browser Library (Playwright) with Chromium       | Web tests — the recommended default            |
-| `selenium` | `base` plus SeleniumLibrary with Chrome and Firefox          | You have existing SeleniumLibrary suites       |
+| Variant    | Contains                                               | Use when                                       |
+| ---------- | ------------------------------------------------------ | ---------------------------------------------- |
+| `base`     | Robot Framework and the common libraries. No browsers. | API, database, SSH, file and data-driven tests |
+| `browser`  | `base` plus Browser Library (Playwright) with Chromium | Web tests — the recommended default            |
+| `selenium` | `base` plus SeleniumLibrary with Chrome and Firefox    | You have existing SeleniumLibrary suites       |
 
 All variants are published for `linux/amd64` and `linux/arm64`, and both
 architectures are tested in CI before anything is pushed.
@@ -39,17 +39,17 @@ You do **not** need `--shm-size=1g`. If you ever do, that is a bug — please re
 
 ## Configuration
 
-| Variable                    | Default                       | Description                                         |
-| --------------------------- | ----------------------------- | --------------------------------------------------- |
-| `ROBOT_TESTS_DIR`           | `/opt/robotframework/tests`   | Where suites are read from                          |
-| `ROBOT_REPORTS_DIR`         | `/opt/robotframework/reports` | Where reports are written                           |
-| `ROBOT_TEST_RUN_ID`         | *(empty)*                     | Subdirectory under the reports dir for this run     |
-| `ROBOT_OPTIONS`             | *(empty)*                     | Extra `robot` arguments                             |
-| `ROBOT_THREADS`             | `1`                           | Parallel processes; uses Pabot when greater than 1  |
-| `PABOT_OPTIONS`             | *(empty)*                     | Extra `pabot` arguments                             |
-| `ROBOT_RERUN_MAX_ROUNDS`    | `0`                           | Rerun rounds for failed tests; `0` disables         |
-| `ROBOT_RERUN_REBOT_OPTIONS` | *(empty)*                     | Extra `rebot` arguments used when merging reruns    |
-| `TZ`                        | `UTC`                         | Timezone                                            |
+| Variable                    | Default                       | Description                                        |
+| --------------------------- | ----------------------------- | -------------------------------------------------- |
+| `ROBOT_TESTS_DIR`           | `/opt/robotframework/tests`   | Where suites are read from                         |
+| `ROBOT_REPORTS_DIR`         | `/opt/robotframework/reports` | Where reports are written                          |
+| `ROBOT_TEST_RUN_ID`         | _(empty)_                     | Subdirectory under the reports dir for this run    |
+| `ROBOT_OPTIONS`             | _(empty)_                     | Extra `robot` arguments                            |
+| `ROBOT_THREADS`             | `1`                           | Parallel processes; uses Pabot when greater than 1 |
+| `PABOT_OPTIONS`             | _(empty)_                     | Extra `pabot` arguments                            |
+| `ROBOT_RERUN_MAX_ROUNDS`    | `0`                           | Rerun rounds for failed tests; `0` disables        |
+| `ROBOT_RERUN_REBOT_OPTIONS` | _(empty)_                     | Extra `rebot` arguments used when merging reruns   |
+| `TZ`                        | `UTC`                         | Timezone                                           |
 
 ### Passing options with spaces
 
@@ -166,11 +166,11 @@ docker buildx build --target browser \
 
 Measured on arm64, with the bundled suites run against each build:
 
-| Build              | Size    | Bundled suites |
-| ------------------ | ------- | -------------- |
-| default            | 1772 MB | pass           |
-| `--only-shell`     | 1132 MB | pass           |
-| `--no-shell`       | 1432 MB | **fail**       |
+| Build          | Size    | Bundled suites |
+| -------------- | ------- | -------------- |
+| default        | 1772 MB | pass           |
+| `--only-shell` | 1132 MB | pass           |
+| `--no-shell`   | 1432 MB | **fail**       |
 
 ### What is deliberately left out
 
@@ -191,13 +191,13 @@ Full versions are **immutable** and never re-pushed. Upstream republished `4.0.0
 with different contents and broke users
 ([#423](https://github.com/ppodgorsek/docker-robot-framework/issues/423)).
 
-| Tag              | Moves?  | Example                |
-| ---------------- | ------- | ---------------------- |
-| `X.Y.Z-<variant>`| never   | `1.0.0-browser`        |
-| `X.Y-<variant>`  | yes     | `1.0-browser`          |
-| `X-<variant>`    | yes     | `1-browser`            |
-| `<variant>`      | yes     | `browser`              |
-| `sha-<commit>`   | never   | `sha-a1b2c3d…`         |
+| Tag               | Moves? | Example         |
+| ----------------- | ------ | --------------- |
+| `X.Y.Z-<variant>` | never  | `1.0.0-browser` |
+| `X.Y-<variant>`   | yes    | `1.0-browser`   |
+| `X-<variant>`     | yes    | `1-browser`     |
+| `<variant>`       | yes    | `browser`       |
+| `sha-<commit>`    | never  | `sha-a1b2c3d…`  |
 
 For CI, pin by digest.
 
@@ -254,11 +254,22 @@ Planned:
 ## Development
 
 ```bash
-make sync     # local .venv with the base dependency group
-make lint     # ruff, hadolint, robocop, lockfile check
-make build    # VARIANT=base|browser|selenium
+make install       # pinned Prettier from package-lock.json
+make sync          # local .venv with the base dependency group
+make hooks         # install the git hooks (once per clone)
+make format        # Prettier for YAML/Markdown/JSON, Ruff for the entrypoint
+make format-check  # verify without writing
+make lint          # yamllint, Ruff, Robocop, hadolint, lockfile check
+make build         # VARIANT=base|browser|selenium
 make test
 ```
+
+`make hooks` installs the pre-commit hooks, which include `no-commit-to-branch`
+for `main` — work on a branch and open a PR. CI runs `make format-check` and the
+same linters, so formatting is enforced rather than merely suggested.
+
+Two dependency sets, two lockfiles: `uv.lock` for everything that ships in an
+image, `package-lock.json` purely to pin Prettier for this repository.
 
 Dependencies live in `pyproject.toml` as one group per variant, resolved into a
 single hash-pinned `uv.lock`. Run `make lock` after changing them.

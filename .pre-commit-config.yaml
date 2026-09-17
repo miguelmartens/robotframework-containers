@@ -1,0 +1,70 @@
+# Git hooks for this repo (https://pre-commit.com).
+#
+#   make hooks       # install (once per clone)
+#   make hooks-run   # run everything over the whole tree
+#
+# Prettier is a `local` system hook on purpose: its version comes from
+# package-lock.json, the same one `make format` uses. Pinning it here as well would
+# give the repo a second source of truth that drifts.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+        # Two trailing spaces are a hard line break in Markdown, which .editorconfig keeps.
+        args: [--markdown-linebreak-ext=md]
+        # Robot Framework is whitespace-significant.
+        exclude: \.robot$
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-added-large-files
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: mixed-line-ending
+        # LF everywhere, matching .gitattributes.
+        args: [--fix=lf]
+      - id: detect-private-key
+      - id: no-commit-to-branch
+        args: [--branch, master, --branch, main]
+  # The entrypoint is Python with a shebang and no .py suffix, so the default
+  # type filter would skip it. Match it by path instead.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.4
+    hooks:
+      - id: ruff-check
+        types_or: [file]
+        files: ^src/entrypoint/rf-entrypoint$
+      - id: ruff-format
+        types_or: [file]
+        files: ^src/entrypoint/rf-entrypoint$
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.38.0
+    hooks:
+      - id: yamllint
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.49.1
+    hooks:
+      - id: markdownlint
+        types: [markdown]
+        args: [--fix, --disable, MD034]
+  - repo: local
+    hooks:
+      # Format YAML, Markdown and JSON with the Prettier version pinned in package.json
+      - id: prettier
+        name: prettier
+        entry: npx --no-install prettier --write --ignore-unknown
+        language: system
+        types_or: [yaml, markdown, json]
+      # Robocop lints the bundled suites using the version pinned in uv.lock, so
+      # the repo and the shipped image always agree on the rules.
+      - id: robocop
+        name: robocop
+        entry: uv run --no-default-groups --group base robocop check tests/
+        language: system
+        pass_filenames: false
+        files: \.robot$

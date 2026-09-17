@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Python environments and tool caches
+.venv/
+.ruff_cache/
+.robocop_cache/
+
+# Robot Framework output
+reports/
+
+# Lock files
+uv.lock
+package-lock.json
+
+# Generated
+*.generated.*

@@ -193,8 +193,13 @@ def install_runtime_dependencies() -> None:
     target.mkdir(parents=True, exist_ok=True)
     result = subprocess.run(
         [
-            sys.executable, "-m", "pip", "install",
-            "--no-cache-dir", "--target", str(target),
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--no-cache-dir",
+            "--target",
+            str(target),
             *install_args,
         ],
         check=False,
@@ -263,9 +268,12 @@ def rerun_failed(reports_dir: Path, exit_code: int) -> int:
         exit_code = subprocess.run(
             [
                 "robot",
-                "--rerunfailed", str(output),
-                "--output", str(rerun_output),
-                "--outputdir", str(reports_dir),
+                "--rerunfailed",
+                str(output),
+                "--output",
+                str(rerun_output),
+                "--outputdir",
+                str(reports_dir),
                 *robot_options,
                 tests_dir,
             ],
@@ -279,9 +287,12 @@ def rerun_failed(reports_dir: Path, exit_code: int) -> int:
         merge = subprocess.run(
             [
                 "rebot",
-                "--outputdir", str(reports_dir),
-                "--output", str(output),
-                "--merge", str(output),
+                "--outputdir",
+                str(reports_dir),
+                "--output",
+                str(output),
+                "--merge",
+                str(output),
                 *rebot_options,
                 str(rerun_output),
             ],

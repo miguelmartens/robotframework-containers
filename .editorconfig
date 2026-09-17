@@ -1,0 +1,27 @@
+# https://editorconfig.org — keep editors consistent with Prettier + .gitattributes.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# Make requires real tabs in recipes.
+[Makefile]
+indent_style = tab
+
+# PEP 8. Covers the entrypoint, which has a shebang instead of a .py suffix.
+[{*.py,rf-entrypoint}]
+indent_size = 4
+
+# Robot Framework separates cells by two or more spaces; four is the convention.
+[*.robot]
+indent_size = 4
+trim_trailing_whitespace = false
+
+# Don't strip trailing whitespace in Markdown (two spaces = hard line break).
+[*.md]
+trim_trailing_whitespace = false
