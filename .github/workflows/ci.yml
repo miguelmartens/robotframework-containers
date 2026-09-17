@@ -174,7 +174,7 @@ jobs:
             rfc:${{ matrix.variant }}
 
       - name: Scan for vulnerabilities
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: rfc:${{ matrix.variant }}
           format: table
@@ -190,6 +190,17 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
+
+      # GitHub's runners give the `runner` user no /etc/subuid range, so
+      # rootless Podman can only map a single uid and keep-id has nowhere to
+      # place the image's uid 1000 (crun: writing gid_map: Invalid argument).
+      # A real rootless host has these ranges; useradd creates them by default.
+      - name: Give the runner a subuid/subgid range
+        run: |
+          sudo usermod --add-subuids 100000-165535 \
+                       --add-subgids 100000-165535 "$USER"
+          podman system migrate
+          grep "$USER" /etc/subuid /etc/subgid
 
       - name: Build with Podman
         run: podman build --target base -t rfc:base .
