@@ -354,8 +354,15 @@ image, `package-lock.json` purely to pin Prettier for this repository.
 Dependencies live in `pyproject.toml` as one group per variant, resolved into a
 single hash-pinned `uv.lock`. Run `make lock` after changing them.
 
+## Contributing
+
+Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md)
+for the setup, the design decisions worth knowing before changing them, and what
+CI will check. Security reports go through [SECURITY.md](SECURITY.md).
+
 ## Licence
 
-MIT. See [LICENSE](LICENSE), which retains the notice for
-`ppodgorsek/docker-robot-framework` (Copyright © 2016 Paul Podgorsek), whose
-design this project builds on.
+MIT — see [LICENSE](LICENSE). This project is an independent successor to
+`ppodgorsek/docker-robot-framework` (Copyright © 2016 Paul Podgorsek), also MIT.
+No source is copied verbatim; what carries over is the interface, so existing
+users can migrate without rewriting their pipelines. See [NOTICE](NOTICE).

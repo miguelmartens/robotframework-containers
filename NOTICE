@@ -1,0 +1,15 @@
+robotframework-containers
+Copyright (c) 2026 Miguel Martens and the robotframework-containers contributors
+
+This project is an independent successor to ppodgorsek/docker-robot-framework
+(https://github.com/ppodgorsek/docker-robot-framework), Copyright (c) 2016 Paul
+Podgorsek, which is also MIT licensed.
+
+No source is copied verbatim. What is carried over is interface, so that
+existing users can migrate without rewriting their pipelines:
+
+  - the /opt/robotframework directory layout
+  - the ROBOT_* environment-variable contract
+  - the rerun-and-merge behaviour behind ROBOT_RERUN_MAX_ROUNDS
+
+Both copyright notices are retained in LICENSE accordingly.
