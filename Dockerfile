@@ -35,6 +35,12 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     set -eux; \
     apt-get update; \
+    # Pick up security updates published since the pinned base image was built.
+    # The digest still fixes the starting point and the SBOM records exactly
+    # what shipped; without this, a CRITICAL in perl-base sits in the image
+    # until Debian happens to republish trixie-slim. The monthly scheduled
+    # rebuild is what keeps this current.
+    apt-get upgrade --yes; \
     apt-get install --no-install-recommends --yes \
         ca-certificates \
         python3 \
@@ -121,6 +127,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 ##############################################################################
 FROM common AS base
 
+# The entrypoint needs an installer for the documented runtime dependency
+# mounts. uv rather than pip: pip vendors its own copies of msgpack and
+# setuptools (pip/_vendor/vendor.txt), which carry published advisories and
+# would fail the CVE gate for code paths only pip itself uses.
+COPY --from=ghcr.io/astral-sh/uv:0.12.10 /uv /usr/local/bin/uv
+
 COPY --from=venv-base --chown=1000:0 /opt/venv /opt/venv
 
 ARG VERSION=dev
@@ -146,6 +158,12 @@ CMD ["run"]
 # precompiled Node runtime as a wheel. No nodejs and no npm in the image.
 ##############################################################################
 FROM common AS browser
+
+# The entrypoint needs an installer for the documented runtime dependency
+# mounts. uv rather than pip: pip vendors its own copies of msgpack and
+# setuptools (pip/_vendor/vendor.txt), which carry published advisories and
+# would fail the CVE gate for code paths only pip itself uses.
+COPY --from=ghcr.io/astral-sh/uv:0.12.10 /uv /usr/local/bin/uv
 
 COPY --from=venv-browser --chown=1000:0 /opt/venv /opt/venv
 
@@ -207,6 +225,12 @@ CMD ["run"]
 # Phase 2; the stage is a placeholder so the graph is complete.
 ##############################################################################
 FROM common AS selenium
+
+# The entrypoint needs an installer for the documented runtime dependency
+# mounts. uv rather than pip: pip vendors its own copies of msgpack and
+# setuptools (pip/_vendor/vendor.txt), which carry published advisories and
+# would fail the CVE gate for code paths only pip itself uses.
+COPY --from=ghcr.io/astral-sh/uv:0.12.10 /uv /usr/local/bin/uv
 
 COPY --from=venv-selenium --chown=1000:0 /opt/venv /opt/venv
 

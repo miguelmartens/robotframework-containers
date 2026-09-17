@@ -232,15 +232,19 @@ Measured on arm64, with the bundled suites run against each build:
 
 | Build          | Size    | Bundled suites |
 | -------------- | ------- | -------------- |
-| default        | 1772 MB | pass           |
-| `--only-shell` | 1132 MB | pass           |
-| `--no-shell`   | 1432 MB | **fail**       |
+| default        | 1843 MB | pass           |
+| `--only-shell` | 1203 MB | pass           |
+| `--no-shell`   | smaller | **fail**       |
+
+`--no-shell` is listed because it looks like the obvious saving and is not one:
+Browser Library's `headless=True` resolves to
+`chromium_headless_shell/chrome-linux/headless_shell`, which that flag omits.
 
 ### What is deliberately left out
 
 **DataDriver's `xls` extra.** It pulls `pandas` and `numpy`, which measured
-141 MB of a 277 MB virtualenv — more than half the image, so that spreadsheets
-can be read. CSV-driven tests work without it. If you need Excel:
+141 MB of a 277 MB virtualenv — more than half of it, so that spreadsheets can
+be read. CSV-driven tests work without it. If you need Excel:
 
 ```dockerfile
 FROM ghcr.io/miguelmartens/robotframework-containers:base
@@ -248,6 +252,12 @@ USER 0
 RUN /opt/venv/bin/pip install --no-cache-dir 'robotframework-datadriver[xls]'
 USER 1000:0
 ```
+
+**pip.** Runtime dependency mounts are installed with `uv`, which is a single
+static binary with nothing vendored. pip bundles its own copies of `msgpack`
+and `setuptools` (`pip/_vendor/vendor.txt`), both with published advisories that
+fail this project's CVE gate over code paths only pip itself uses. `uv` is also
+far faster, which matters because that install runs on every container start.
 
 ## Tags
 

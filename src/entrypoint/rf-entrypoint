@@ -31,6 +31,7 @@ DEFAULT_TESTS_DIR = "/opt/robotframework/tests"
 DEFAULT_REPORTS_DIR = "/opt/robotframework/reports"
 DEFAULT_DEPENDENCY_DIR = "/opt/robotframework/dependencies"
 
+UV = "/usr/local/bin/uv"
 PIP_REQUIREMENTS = Path("/opt/robotframework/pip-requirements.txt")
 PYPROJECT = Path("/opt/robotframework/pyproject.toml")
 
@@ -193,11 +194,12 @@ def install_runtime_dependencies() -> None:
     target.mkdir(parents=True, exist_ok=True)
     result = subprocess.run(
         [
-            sys.executable,
-            "-m",
+            UV,
             "pip",
             "install",
-            "--no-cache-dir",
+            "--no-cache",
+            "--python",
+            sys.executable,
             "--target",
             str(target),
             *install_args,
