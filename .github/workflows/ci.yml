@@ -174,7 +174,7 @@ jobs:
             rfc:${{ matrix.variant }}
 
       - name: Scan for vulnerabilities
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           image-ref: rfc:${{ matrix.variant }}
           format: table
@@ -194,25 +194,34 @@ jobs:
       - name: Build with Podman
         run: podman build --target base -t rfc:base .
 
+      # Rootless Podman maps the invoking user to container root, so container
+      # uid 1000 lands on a subuid that does not own the bind-mounted host
+      # directory. keep-id maps the invoking user straight onto the image's
+      # uid/gid, which is the only option that also hands the reports back
+      # owned by that user.
+      #
+      # The `:U` flag is the trap here: it works, but chowns the host directory
+      # to the mapped subuid, after which the invoking user cannot even delete
+      # the files.
       - name: Run the base suite, rootless
         run: |
           mkdir -p reports
-          podman run --rm \
+          podman run --rm --userns=keep-id:uid=1000,gid=0 \
             -v "$PWD/tests/base:/opt/robotframework/tests:ro,z" \
             -v "$PWD/reports:/opt/robotframework/reports:z" \
             rfc:base
 
       - name: Run hardened, with an arbitrary UID
         run: |
-          mkdir -p reports-hardened && chmod g+w reports-hardened
-          podman run --rm --user 4711:0 \
+          mkdir -p reports-hardened
+          podman run --rm --userns=keep-id:uid=4711,gid=0 --user 4711:0 \
             --read-only --tmpfs /tmp \
             --cap-drop=ALL --security-opt=no-new-privileges \
             -v "$PWD/tests/base:/opt/robotframework/tests:ro,z" \
             -v "$PWD/reports-hardened:/opt/robotframework/reports:z" \
             rfc:base
 
-      - name: Reports are owned by the invoking user, not root
+      - name: Reports come back owned by the invoking user
         run: test -O reports/output.xml
 
   publish:

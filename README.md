@@ -52,6 +52,32 @@ It matters on Fedora/RHEL hosts and is ignored everywhere else. `:Z` would also
 work but relabels the host directory exclusively, which can break other tools
 reading the same path.
 
+#### Rootless Podman and the reports directory
+
+Rootless Podman maps your user to container root, so the image's uid `1000`
+lands on a _subuid_ that does not own your bind-mounted reports directory. The
+run fails with a clear message rather than a stack trace, but it does fail. Map
+your user onto the image's uid instead:
+
+```bash
+podman run --rm --userns=keep-id:uid=1000,gid=0 \
+  -v "$PWD/tests:/opt/robotframework/tests:ro,z" \
+  -v "$PWD/reports:/opt/robotframework/reports:z" \
+  ghcr.io/miguelmartens/robotframework-containers:browser
+```
+
+Reports then come back owned by you. Measured on a rootless Linux host:
+
+| Approach                          | Writes? | Reports owned by                    |
+| --------------------------------- | ------- | ----------------------------------- |
+| plain `podman run`                | no      | —                                   |
+| `--userns=keep-id:uid=1000,gid=0` | yes     | you                                 |
+| `:U` volume flag                  | yes     | **a subuid you cannot even delete** |
+
+`:U` is the trap: it looks like the fix and leaves you with files you cannot
+remove. This does not arise on macOS, where the Podman machine's virtiofs mount
+maps ownership for you — only on Linux hosts, which is where CI runs.
+
 ### Compose
 
 `compose.yaml` runs the suites with either engine and starts the static site the
