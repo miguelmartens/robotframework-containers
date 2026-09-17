@@ -15,3 +15,5 @@ package-lock.json
 
 # Generated
 *.generated.*
+# Written by Release Please in its own format.
+CHANGELOG.md
