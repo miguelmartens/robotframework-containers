@@ -1,6 +1,11 @@
 [project]
 name = "robotframework-containers"
-version = "0.1.0"
+# Deliberately fixed. This is not a published Python package, and uv records
+# the project's version in uv.lock -- so letting a release bump it here would
+# desync the lockfile and fail `uv lock --check` on every release PR.
+# The version that matters is the git tag, which Release Please maintains in
+# version.txt, .release-please-manifest.json and CHANGELOG.md.
+version = "0.0.0"
 description = "Container images for running Robot Framework test suites."
 readme = "README.md"
 license = "MIT"
