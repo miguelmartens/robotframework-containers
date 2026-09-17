@@ -1,6 +1,6 @@
 [project]
 name = "robotframework-containers"
-version = "0.1.0" # x-release-please-version
+version = "0.1.0"
 description = "Container images for running Robot Framework test suites."
 readme = "README.md"
 license = "MIT"

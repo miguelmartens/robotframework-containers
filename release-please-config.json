@@ -9,20 +9,64 @@
     ".": {
       "package-name": "robotframework-containers",
       "changelog-path": "CHANGELOG.md",
-      "extra-files": ["pyproject.toml"]
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "pyproject.toml",
+          "jsonpath": "$.project.version"
+        }
+      ]
     }
   },
   "changelog-sections": [
-    { "type": "feat", "section": "Features" },
-    { "type": "fix", "section": "Fixes" },
-    { "type": "perf", "section": "Performance" },
-    { "type": "build", "section": "Build and images" },
-    { "type": "deps", "section": "Dependencies" },
-    { "type": "docs", "section": "Documentation" },
-    { "type": "ci", "section": "CI", "hidden": true },
-    { "type": "chore", "section": "Chores", "hidden": true },
-    { "type": "refactor", "section": "Refactoring", "hidden": true },
-    { "type": "test", "section": "Tests", "hidden": true },
-    { "type": "style", "section": "Style", "hidden": true }
+    {
+      "type": "feat",
+      "section": "Features"
+    },
+    {
+      "type": "fix",
+      "section": "Fixes"
+    },
+    {
+      "type": "perf",
+      "section": "Performance"
+    },
+    {
+      "type": "build",
+      "section": "Build and images"
+    },
+    {
+      "type": "deps",
+      "section": "Dependencies"
+    },
+    {
+      "type": "docs",
+      "section": "Documentation"
+    },
+    {
+      "type": "ci",
+      "section": "CI",
+      "hidden": true
+    },
+    {
+      "type": "chore",
+      "section": "Chores",
+      "hidden": true
+    },
+    {
+      "type": "refactor",
+      "section": "Refactoring",
+      "hidden": true
+    },
+    {
+      "type": "test",
+      "section": "Tests",
+      "hidden": true
+    },
+    {
+      "type": "style",
+      "section": "Style",
+      "hidden": true
+    }
   ]
 }
