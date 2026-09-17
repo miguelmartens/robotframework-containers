@@ -254,18 +254,19 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          flavor: |
-            latest=false
-            suffix=-${{ matrix.variant }},onlatest=true
+          flavor: latest=false
           # Immutable, fully-qualified tags first. Upstream republished 4.0.0
           # with different contents and broke people (#423); a full version
           # here is never re-pushed.
+          #
+          # The suffix is per-tag, not a global flavor: a global one also
+          # applies to the raw variant tag and yields `browser-browser`.
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            type=semver,pattern={{version}},suffix=-${{ matrix.variant }}
+            type=semver,pattern={{major}}.{{minor}},suffix=-${{ matrix.variant }}
+            type=semver,pattern={{major}},suffix=-${{ matrix.variant }}
+            type=sha,format=long,suffix=-${{ matrix.variant }}
             type=raw,value=${{ matrix.variant }},enable={{is_default_branch}}
-            type=sha,format=long
 
       - id: build
         uses: docker/build-push-action@v6
