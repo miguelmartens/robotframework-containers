@@ -17,6 +17,7 @@ node_modules/
 
 # Python
 __pycache__/
+*.egg-info/
 *.py[cod]
 .venv/
 .ruff_cache/
