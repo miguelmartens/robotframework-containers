@@ -266,7 +266,10 @@ jobs:
             type=semver,pattern={{major}}.{{minor}},suffix=-${{ matrix.variant }}
             type=semver,pattern={{major}},suffix=-${{ matrix.variant }}
             type=sha,format=long,suffix=-${{ matrix.variant }}
-            type=raw,value=${{ matrix.variant }},enable={{is_default_branch}}
+            # Release-only: the friendliest tag name must point at a release,
+            # not at whatever landed on main last. Pushes to main publish the
+            # immutable sha- tag and nothing else.
+            type=raw,value=${{ matrix.variant }},enable=${{ github.ref_type == 'tag' }}
 
       - id: build
         uses: docker/build-push-action@v6

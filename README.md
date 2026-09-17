@@ -267,13 +267,16 @@ Full versions are **immutable** and never re-pushed. Upstream republished `4.0.0
 with different contents and broke users
 ([#423](https://github.com/ppodgorsek/docker-robot-framework/issues/423)).
 
-| Tag                      | Moves? | Example                |
-| ------------------------ | ------ | ---------------------- |
-| `X.Y.Z-<variant>`        | never  | `1.0.0-browser`        |
-| `X.Y-<variant>`          | yes    | `1.0-browser`          |
-| `X-<variant>`            | yes    | `1-browser`            |
-| `<variant>`              | yes    | `browser`              |
-| `sha-<commit>-<variant>` | never  | `sha-a1b2c3d…-browser` |
+| Tag                      | Moves? | Example                    |
+| ------------------------ | ------ | -------------------------- |
+| `X.Y.Z-<variant>`        | never  | `1.0.0-browser`            |
+| `X.Y-<variant>`          | yes    | `1.0-browser`              |
+| `X-<variant>`            | yes    | `1-browser`                |
+| `<variant>`              | yes    | `browser` — newest release |
+| `sha-<commit>-<variant>` | never  | `sha-a1b2c3d…-browser`     |
+
+The moving `<variant>` tag follows the newest **release**, not `main`. Pushes
+to `main` publish only the immutable `sha-<commit>-<variant>` tag.
 
 For CI, pin by digest.
 
