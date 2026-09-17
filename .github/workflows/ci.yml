@@ -2,12 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [main]
-    tags: ["v*"]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
-  # Rebuild monthly so OS CVE fixes ship even when no dependency changed.
-  # Upstream only ever rebuilt when a version was bumped by hand.
+    branches: [main, develop]
+  # Monthly drift check. Rebuilds from the current source and re-runs the CVE
+  # gate, so a vulnerability published against the shipped image surfaces as a
+  # failed scheduled run rather than sitting there unnoticed. Publishing happens
+  # only from a release, so the fix ships as a patch release.
   schedule:
     - cron: "0 4 1 * *"
   workflow_dispatch:
@@ -226,76 +227,18 @@ jobs:
       - name: The suite really produced a report
         run: test -s reports/output.xml
 
-  publish:
-    needs: build-test
-    if: github.event_name != 'pull_request'
+  # One required status check for branch protection. Matrix leg names change
+  # whenever the matrix does; this does not.
+  ci:
+    if: always()
+    needs: [lint, build-test, podman]
     runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      packages: write
-      id-token: write # cosign keyless signing
-      attestations: write
-    strategy:
-      fail-fast: false
-      matrix:
-        variant: [base, browser]
     steps:
-      - uses: actions/checkout@v5
-
-      - uses: docker/setup-buildx-action@v3
-
-      - uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          flavor: latest=false
-          # Immutable, fully-qualified tags first. Upstream republished 4.0.0
-          # with different contents and broke people (#423); a full version
-          # here is never re-pushed.
-          #
-          # The suffix is per-tag, not a global flavor: a global one also
-          # applies to the raw variant tag and yields `browser-browser`.
-          tags: |
-            type=semver,pattern={{version}},suffix=-${{ matrix.variant }}
-            type=semver,pattern={{major}}.{{minor}},suffix=-${{ matrix.variant }}
-            type=semver,pattern={{major}},suffix=-${{ matrix.variant }}
-            type=sha,format=long,suffix=-${{ matrix.variant }}
-            # Release-only: the friendliest tag name must point at a release,
-            # not at whatever landed on main last. Pushes to main publish the
-            # immutable sha- tag and nothing else.
-            type=raw,value=${{ matrix.variant }},enable=${{ github.ref_type == 'tag' }}
-
-      - id: build
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: ${{ matrix.variant }}
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          sbom: true
-          provenance: mode=max
-          cache-from: |
-            type=gha,scope=${{ matrix.variant }}-amd64
-            type=gha,scope=${{ matrix.variant }}-arm64
-          build-args: |
-            VERSION=${{ github.ref_type == 'tag' && github.ref_name || 'dev' }}
-            REVISION=${{ github.sha }}
-
-      - uses: sigstore/cosign-installer@v4.1.2
-
-      - name: Sign the image
+      - name: Fail if anything upstream did not succeed
         run: |
-          cosign sign --yes \
-            "${REGISTRY}/${IMAGE_NAME}@${DIGEST}"
-        env:
-          REGISTRY: ${{ env.REGISTRY }}
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
-          DIGEST: ${{ steps.build.outputs.digest }}
+          echo "lint=${{ needs.lint.result }}"
+          echo "build-test=${{ needs.build-test.result }}"
+          echo "podman=${{ needs.podman.result }}"
+          [ "${{ needs.lint.result }}" = "success" ] \
+            && [ "${{ needs.build-test.result }}" = "success" ] \
+            && [ "${{ needs.podman.result }}" = "success" ]

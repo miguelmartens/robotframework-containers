@@ -2,13 +2,15 @@
   "name": "robotframework-containers",
   "version": "0.0.0",
   "private": true,
-  "description": "Tooling-only manifest: pins the Prettier version used to format this repository.",
+  "description": "Tooling-only manifest: pins the Prettier and commitlint versions used by this repository.",
   "license": "MIT",
   "scripts": {
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
   "devDependencies": {
+    "@commitlint/cli": "21.2.2",
+    "@commitlint/config-conventional": "21.2.2",
     "prettier": "3.9.7"
   }
 }

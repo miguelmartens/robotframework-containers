@@ -1,0 +1,44 @@
+name: Release
+
+# Release Please keeps an open "chore(release): x.y.z" pull request against
+# main, containing the version bump and the generated CHANGELOG entry. Merging
+# that PR tags the release and publishes the images.
+#
+# main only ever receives merges from develop, so this runs there.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # create tags and releases
+      pull-requests: write # maintain the release PR
+    outputs:
+      released: ${{ steps.release.outputs.release_created }}
+      tag: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@v5
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish:
+    needs: release-please
+    if: needs.release-please.outputs.released == 'true'
+    uses: ./.github/workflows/publish.yml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    with:
+      ref: ${{ needs.release-please.outputs.tag }}
+      version: ${{ needs.release-please.outputs.version }}

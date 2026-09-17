@@ -19,10 +19,53 @@ make help      # everything else
 `make hooks` is worth doing: the hooks catch formatting and lint problems before
 CI does, and CI runs the same checks.
 
+## Branches
+
+| Branch                  | What it is                                                                     |
+| ----------------------- | ------------------------------------------------------------------------------ |
+| `main`                  | Released code only. Receives merges from `develop` and nothing else. Protected |
+| `develop`               | Integration. Everything lands here first. Protected                            |
+| `feature/*`, `fix/*`, … | Your work. Branch from `develop`, PR back into `develop`                       |
+
+Neither `main` nor `develop` accepts a direct push. Both require a pull request
+with CI green; neither requires an approving review, so you can merge your own
+work while the project has one maintainer.
+
+```text
+feature/x ──PR──► develop ──release PR──► main ──Release Please──► v0.2.0
+                     │                                                 │
+                     └── CI only, nothing published                    └── images published
+```
+
+## Commit messages
+
+[Conventional Commits](https://www.conventionalcommits.org/), enforced in two
+places: a `commit-msg` hook locally, and a check on the pull request title,
+because feature branches are **squash-merged** and the PR title becomes the
+commit on `develop`.
+
+```text
+feat(browser): install chromium with --only-shell by default
+fix: keep quoted values in ROBOT_OPTIONS
+deps: bump robotframework to 7.5.1
+```
+
+`feat` bumps the minor version, `fix` and `perf` the patch. A `!` after the type
+or a `BREAKING CHANGE:` footer bumps the major. Anything else — `ci`, `chore`,
+`refactor`, `test`, `style` — is released but hidden from the changelog.
+
+Getting this wrong does not just look untidy: Release Please computes the next
+version and the changelog from these messages, so a mislabelled commit is a
+change that silently never appears in a release.
+
 ## Working on a change
 
-`main` is protected by a `no-commit-to-branch` hook, so work on a branch and
-open a pull request.
+Branch from `develop`:
+
+```bash
+git switch develop && git pull
+git switch -c feature/short-description
+```
 
 Before pushing:
 
@@ -96,9 +139,26 @@ issue tracker.
   `[xls]` extra saved 137 MB of `pandas` and `numpy`; that kind of trade is
   normal here.
 
+## Releasing
+
+1. Open a pull request from `develop` into `main`. Use a **merge commit**, not a
+   squash — Release Please reads the individual commits to work out the version,
+   and squashing hides them.
+2. Release Please opens a `chore(release): x.y.z` pull request against `main`
+   with the version bump and the generated `CHANGELOG.md` entry.
+3. Merge it. That tags `vx.y.z`, creates the GitHub release, and publishes the
+   images.
+
+Nothing is published from `main` or `develop` directly — only from a release.
+`CHANGELOG.md`, the version in `pyproject.toml` and
+`.release-please-manifest.json` are all maintained by the tool; do not edit them
+by hand.
+
 ## Pull requests
 
 - One logical change per pull request.
+- Title must be a Conventional Commit. Feature PRs are squash-merged, so the
+  title is the commit message that ends up on `develop`.
 - Explain _why_ in the description. If you measured something, include the
   numbers — the commit history is full of them and it is genuinely useful later.
 - CI must be green: lint, both variants on `amd64` and `arm64`, the Podman job,

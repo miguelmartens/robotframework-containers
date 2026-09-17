@@ -47,7 +47,7 @@ waiting on a private report — no details.
 | OS packages | `apt-get upgrade` at build so fixes land without waiting for a base-image republish                                                                                                |
 | Python      | One hash-pinned `uv.lock`, one virtualenv per variant, no compilers in a runtime image                                                                                             |
 | Scanning    | Trivy gates every build on fixable `CRITICAL`/`HIGH`. It fails the build; it does not file a report and continue                                                                   |
-| Rebuilds    | Scheduled monthly, so fixes ship even when no dependency changed                                                                                                                   |
+| Rebuilds    | A scheduled monthly build re-runs the CVE gate against current sources, so drift surfaces as a failed run rather than silently                                                     |
 | Provenance  | SBOM and `mode=max` provenance attestations, plus keyless cosign signatures                                                                                                        |
 | Tags        | A full version is never re-pushed. Upstream republished `4.0.0` with different contents and broke people ([#423](https://github.com/ppodgorsek/docker-robot-framework/issues/423)) |
 

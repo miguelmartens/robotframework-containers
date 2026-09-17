@@ -280,8 +280,10 @@ to `main` publish only the immutable `sha-<commit>-<variant>` tag.
 
 For CI, pin by digest.
 
-Images are rebuilt on the first of every month so OS security fixes ship even when
-no dependency has changed.
+A scheduled build on the first of every month rebuilds from current sources and
+re-runs the vulnerability gate. A newly published CVE against the shipped image
+therefore shows up as a failed run rather than sitting unnoticed, and the fix
+ships as a patch release.
 
 ### Verifying provenance
 

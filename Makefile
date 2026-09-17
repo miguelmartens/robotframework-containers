@@ -27,7 +27,7 @@ help:
 	@echo "  make format-check    - Check formatting without modifying files"
 	@echo "  make lint            - Lint YAML, Python, the Dockerfile and the suites"
 	@echo "  make lint-check      - Lint everything (for CI)"
-	@echo "  make hooks           - Install the git hooks from .pre-commit-config.yaml"
+	@echo "  make hooks           - Install the git hooks (pre-commit + commit-msg)"
 	@echo "  make hooks-run       - Run every pre-commit hook over the whole tree"
 	@echo "  make hooks-update    - Bump the pinned hook revisions (Renovate does this too)"
 	@echo "  make build           - Build one image  (VARIANT=base|browser|selenium)"
@@ -81,8 +81,9 @@ lint-check: lint
 
 # Install the git hooks (pre-commit itself lives outside this repo:
 # `uv tool install pre-commit`, brew or pipx)
+# commit-msg is a separate hook type; without it commitlint never runs.
 hooks:
-	$(PRECOMMIT) install
+	$(PRECOMMIT) install --hook-type pre-commit --hook-type commit-msg
 
 # Run every hook over the whole tree, not just the files a commit touches
 hooks-run:
